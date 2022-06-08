@@ -20,7 +20,8 @@ See our template model class 'template_model.py' for more details.
 
 import importlib
 from models.base_model import BaseModel
-
+from .modeling import *
+from ._deeplab import convert_to_separable_conv
 
 def find_model_using_name(model_name):
     """Import the module "models/[model_name]_model.py".

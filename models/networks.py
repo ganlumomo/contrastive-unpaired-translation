@@ -4,8 +4,10 @@ import torch.nn.functional as F
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
+from torch.autograd import Variable
 import numpy as np
 from .stylegan_networks import StyleGAN2Discriminator, StyleGAN2Generator, TileStyleGAN2Discriminator
+from .modeling import deeplabv3plus_resnet50
 
 ###############################################################################
 # Helper Functions
@@ -263,9 +265,13 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'resnet_cat':
         n_blocks = 8
         net = G_Resnet(input_nc, output_nc, opt.nz, num_downs=2, n_res=n_blocks - 4, ngf=ngf, norm='inst', nl_layer='relu')
+    elif netG == 'deeplabv3plus':
+        net = deeplabv3plus_resnet50(num_classes=output_nc, output_stride=8, pretrained_backbone=True)
+        net.classifier = init_net(net.classifier, init_type, init_gain, gpu_ids, initialize_weights=True)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
-    return init_net(net, init_type, init_gain, gpu_ids, initialize_weights=('stylegan2' not in netG))
+    #return init_net(net, init_type, init_gain, gpu_ids, initialize_weights=('stylegan2' not in netG))
+    return init_net(net, init_type, init_gain, gpu_ids, initialize_weights=False)
 
 
 def define_F(input_nc, netF, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, no_antialias=False, gpu_ids=[], opt=None):
@@ -406,6 +412,38 @@ class GANLoss(nn.Module):
                 loss = F.softplus(-prediction).view(bs, -1).mean(dim=1)
             else:
                 loss = F.softplus(prediction).view(bs, -1).mean(dim=1)
+        return loss
+
+
+class CrossEntropy2d(nn.Module):
+
+    def __init__(self, size_average=True, ignore_label=0):
+        super(CrossEntropy2d, self).__init__()
+        self.size_average = size_average
+        self.ignore_label = ignore_label
+
+    def forward(self, predict, target, weight=None):
+        """
+            Args:
+                predict:(n, c, h, w)
+                target:(n, h, w)
+                weight (Tensor, optional): a manual rescaling weight given to each class.
+                                           If given, has to be a Tensor of size "nclasses"
+        """
+        assert not target.requires_grad
+        assert predict.dim() == 4
+        assert target.dim() == 3
+        assert predict.size(0) == target.size(0), "{0} vs {1} ".format(predict.size(0), target.size(0))
+        assert predict.size(2) == target.size(1), "{0} vs {1} ".format(predict.size(2), target.size(1))
+        assert predict.size(3) == target.size(2), "{0} vs {1} ".format(predict.size(3), target.size(3))
+        n, c, h, w = predict.size()
+        target_mask = (target >= 0) * (target != self.ignore_label)
+        target = target[target_mask]
+        if not target.data.dim():
+            return Variable(torch.zeros(1))
+        predict = predict.transpose(1, 2).transpose(2, 3).contiguous()
+        predict = predict[target_mask.view(n, h, w, 1).repeat(1, 1, 1, c)].view(-1, c)
+        loss = F.cross_entropy(predict, target, weight=weight, size_average=self.size_average, ignore_index=self.ignore_label)
         return loss
 
 

@@ -1,4 +1,4 @@
-name: contrastive-unpaired-translation
+name: cut
 channels:
 - pytorch
 - defaults

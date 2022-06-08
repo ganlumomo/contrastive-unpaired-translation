@@ -61,6 +61,23 @@ def tensor2im(input_image, imtype=np.uint8):
         image_numpy = input_image
     return image_numpy.astype(imtype)
 
+def tensor2color(input_image, imtype=np.uint8):
+    palette = [0, 0, 0, 120, 32, 35, 54, 132, 70, 128, 128, 60, 51, 53, 105, 129, 42, 135, 43, 133, 133,
+            127, 128, 132, 59, 10, 8, 191, 39, 45, 81, 131, 67, 189, 128, 49, 72, 50, 121, 190, 34, 136,
+            76, 131, 133, 188, 126, 131, 29, 64, 36, 190, 72, 46, 129, 195, 65, 32, 75, 134, 129, 73, 133]
+    image_numpy = input_image.cpu().data[0].numpy()
+    if input_image.dim() == 4:
+        image_numpy = np.argmax(image_numpy, axis=0)
+    new_mask = Image.fromarray(image_numpy.astype(imtype)).convert('P')
+    new_mask.putpalette(palette)
+    image_numpy = np.array(new_mask.convert('RGB'))
+    return image_numpy.astype(imtype)
+
+def tensor2label(input_image, imtype=np.uint8):
+    image_numpy = input_image.cpu().data[0].numpy()
+    if input_image.dim() == 4:
+        image_numpy = np.argmax(image_numpy, axis=0)
+    return image_numpy.astype(imtype)
 
 def diagnose_network(net, name='network'):
     """Calculate and print the mean of average absolute(gradients)
@@ -88,9 +105,13 @@ def save_image(image_numpy, image_path, aspect_ratio=1.0):
         image_numpy (numpy array) -- input numpy array
         image_path (str)          -- the path of the image
     """
-
-    image_pil = Image.fromarray(image_numpy)
-    h, w, _ = image_numpy.shape
+    if image_numpy.ndim == 3:
+        image_pil = Image.fromarray(image_numpy)
+        h, w, _ = image_numpy.shape
+    else: # save labels
+        image_pil = Image.fromarray(image_numpy).convert('L')
+        h, w = image_numpy.shape
+        image_pil = image_pil.resize((640, 480), Image.NEAREST)
 
     if aspect_ratio is None:
         pass

@@ -51,13 +51,16 @@ if __name__ == '__main__':
     print('creating web directory', web_dir)
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
 
+    model.visual_names = ['target', 'target_pred', 'target_label']
     for i, data in enumerate(dataset):
         if i == 0:
+            if opt.eval:
+                model.eval()
             model.data_dependent_initialize(data)
             model.setup(opt)               # regular setup: load and print networks; create schedulers
             model.parallelize()
-            if opt.eval:
-                model.eval()
+            #if opt.eval:
+            #    model.eval()
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
             break
         model.set_input(data)  # unpack data from data loader
