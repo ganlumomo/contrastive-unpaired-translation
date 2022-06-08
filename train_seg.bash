@@ -1,0 +1,1 @@
+python train.py --mode seg --name baseline_soda --dataroot ../mmsegmentation/data --dataset_mode segmentation --output_nc 21 --n_epochs 100 --batch_size 16 --lr 0.01 --crop_size 480 --save_epoch_freq 1 --display_freq 100 --display_env baseline_soda

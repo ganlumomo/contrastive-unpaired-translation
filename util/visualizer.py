@@ -32,7 +32,11 @@ def save_images(webpage, visuals, image_path, aspect_ratio=1.0, width=256):
     ims, txts, links = [], [], []
 
     for label, im_data in visuals.items():
-        im = util.tensor2im(im_data)
+        if 'pred' in label or 'label' in label:
+            im = util.tensor2color(im_data)
+            #im = util.tensor2label(im_data)
+        else:
+            im = util.tensor2im(im_data)
         image_name = '%s/%s.png' % (label, name)
         os.makedirs(os.path.join(image_dir, label), exist_ok=True)
         save_path = os.path.join(image_dir, image_name)
@@ -103,7 +107,7 @@ class Visualizer():
         print('Command: %s' % cmd)
         Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
 
-    def display_current_results(self, visuals, epoch, save_result):
+    def display_current_results(self, visuals, iters, save_result, update_freq):
         """Display current results on visdom; save current results to an HTML file.
 
         Parameters:
@@ -127,7 +131,10 @@ class Visualizer():
                 images = []
                 idx = 0
                 for label, image in visuals.items():
-                    image_numpy = util.tensor2im(image)
+                    if 'pred' in label or 'label' in label:
+                        image_numpy = util.tensor2color(image)
+                    else:
+                        image_numpy = util.tensor2im(image)
                     label_html_row += '<td>%s</td>' % label
                     images.append(image_numpy.transpose([2, 0, 1]))
                     idx += 1
@@ -154,7 +161,10 @@ class Visualizer():
                 idx = 1
                 try:
                     for label, image in visuals.items():
-                        image_numpy = util.tensor2im(image)
+                        if 'pred' in label or 'label' in label:
+                            image_numpy = util.tensor2color(image)
+                        else:
+                            image_numpy = util.tensor2im(image)
                         self.vis.image(
                             image_numpy.transpose([2, 0, 1]),
                             self.display_id + idx,
@@ -169,19 +179,21 @@ class Visualizer():
             self.saved = True
             # save images to the disk
             for label, image in visuals.items():
-                image_numpy = util.tensor2im(image)
-                img_path = os.path.join(self.img_dir, 'epoch%.3d_%s.png' % (epoch, label))
+                if 'pred' in label or 'label' in label:
+                    image_numpy = util.tensor2color(image)
+                else:
+                    image_numpy = util.tensor2im(image)
+                img_path = os.path.join(self.img_dir, 'iter%.3d_%s.png' % (iters, label))
                 util.save_image(image_numpy, img_path)
 
             # update website
             webpage = html.HTML(self.web_dir, 'Experiment name = %s' % self.name, refresh=0)
-            for n in range(epoch, 0, -1):
-                webpage.add_header('epoch [%d]' % n)
+            for n in range(iters, 0, -update_freq):
+                webpage.add_header('iter [%d]' % n)
                 ims, txts, links = [], [], []
 
-                for label, image_numpy in visuals.items():
-                    image_numpy = util.tensor2im(image)
-                    img_path = 'epoch%.3d_%s.png' % (n, label)
+                for label, _ in visuals.items():
+                    img_path = 'iter%.3d_%s.png' % (n, label)
                     ims.append(img_path)
                     txts.append(label)
                     links.append(img_path)
@@ -223,7 +235,7 @@ class Visualizer():
             self.create_visdom_connections()
 
     # losses: same format as |losses| of plot_current_losses
-    def print_current_losses(self, epoch, iters, losses, t_comp, t_data):
+    def print_current_losses(self, epoch, iters, losses, t_comp, t_data, lr):
         """print current losses on console; also save the losses to the disk
 
         Parameters:
@@ -233,7 +245,7 @@ class Visualizer():
             t_comp (float) -- computational time per data point (normalized by batch_size)
             t_data (float) -- data loading time per data point (normalized by batch_size)
         """
-        message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f) ' % (epoch, iters, t_comp, t_data)
+        message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f, lr: %.3f) ' % (epoch, iters, t_comp, t_data, lr)
         for k, v in losses.items():
             message += '%s: %.3f ' % (k, v)
 
