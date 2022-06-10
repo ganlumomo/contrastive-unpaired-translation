@@ -3,7 +3,6 @@ import torch
 from .base_model import BaseModel
 from . import networks
 from .patchnce import PatchNCELoss
-from .supcon import SupConLoss
 import util.util as util
 import torch.nn as nn
 import torch.nn.functional as F
@@ -40,9 +39,8 @@ class AdaptModel(BaseModel):
 
         # specify the training losses you want to print out.
         # The training/test scripts will call <BaseModel.get_current_losses>
-        self.loss_names = ['G_SEG', 'G_GAN', 'D_source', 'D_target', 'G', 'SupCon']
+        self.loss_names = ['G_SEG', 'G_GAN', 'D_source', 'D_target', 'G']
         self.visual_names = ['source', 'source_pred', 'source_label', 'target', 'target_pred', 'target_label']
-        self.nce_layers = [int(i) for i in self.opt.nce_layers.split(',')]
 
         if self.isTrain:
             self.model_names = ['G', 'F', 'D']
@@ -59,10 +57,6 @@ class AdaptModel(BaseModel):
             # define loss functions
             self.criterionSEG = networks.CrossEntropy2d().to(self.device)
             self.criterionGAN = networks.GANLoss(opt.gan_mode).to(self.device)
-            self.criterionSupCon = []
-
-            for nce_layer in self.nce_layers:
-                self.criterionSupCon.append(SupConLoss(temperature=opt.nce_T).to(self.device))
             
             # define optimizers
             self.optimizer_G = torch.optim.SGD(self.optim_parameters(), lr=opt.lr, momentum=0.9, weight_decay=0.0001)
@@ -100,9 +94,6 @@ class AdaptModel(BaseModel):
         if self.opt.isTrain:
             self.compute_D_loss().backward()                  # calculate gradients for D
             self.compute_G_loss().backward()                   # calculate graidents for G
-            if self.opt.lambda_NCE > 0.0:
-                self.optimizer_F = torch.optim.Adam(self.netF.parameters(), lr=0.0002, betas=(self.opt.beta1, self.opt.beta2))
-                self.optimizers.append(self.optimizer_F)
     
     def optimize_parameters(self):
         # forward
@@ -118,13 +109,9 @@ class AdaptModel(BaseModel):
         # update G
         self.set_requires_grad(self.netD, False)
         self.optimizer_G.zero_grad()
-        if self.opt.lambda_NCE > 0.0 and self.opt.netF == 'mlp_sample':
-            self.optimizer_F.zero_grad()
         self.loss_G = self.compute_G_loss()
         self.loss_G.backward()
         self.optimizer_G.step()
-        if self.opt.lambda_NCE > 0.0 and self.opt.netF == 'mlp_sample':
-            self.optimizer_F.step()
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -180,27 +167,5 @@ class AdaptModel(BaseModel):
         else:
             self.loss_G_GAN = 0.0
 
-        if self.opt.lambda_NCE > 0.0:
-            self.loss_SupCon = self.calculate_SupCon_loss(self.source, self.target, self.source_label, self.target_label)
-        else:
-            self.loss_SupCon = 0.0
-
-        self.loss_G = self.loss_G_SEG + self.loss_G_GAN * self.opt.lambda_GAN + self.loss_SupCon * self.opt.lambda_NCE
+        self.loss_G = self.loss_G_SEG + self.loss_G_GAN * self.opt.lambda_GAN
         return self.loss_G
-
-    def calculate_SupCon_loss(self, src, tgt, src_label, tgt_label):
-        try:
-            feat_k = self.netG.backbone(src, encode_only=True)
-            feat_q = self.netG.backbone(tgt, encode_only=True)
-        except:
-            feat_k = self.netG.module.backbone(src, encode_only=True)
-            feat_q = self.netG.module.backbone(src, encode_only=True)
-        feat_k_pool, feat_k_labels = self.netF(feat_k, src_label, self.opt.num_patches, None)
-        feat_q_pool, feat_q_labels = self.netF(feat_q, tgt_label, self.opt.num_patches, None)
-        
-        total_loss = 0.0
-        for f_k, f_q, f_k_l, f_q_l, crit in zip(feat_k_pool, feat_q_pool, feat_k_labels, feat_q_labels, self.criterionSupCon):
-            loss = crit(f_k, f_q, f_k_l, f_q_l)
-            total_loss += loss
-
-        return total_loss / 4

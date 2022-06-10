@@ -68,8 +68,9 @@ class IntermediateLayerGetter(nn.ModuleDict):
         super(IntermediateLayerGetter, self).__init__(layers)
         self.return_layers = orig_return_layers
 
-    def forward(self, x):
+    def forward(self, x, encode_only=False):
         out = OrderedDict()
+        feats = []
         for name, module in self.named_children():
             if self.hrnet_flag and name.startswith('transition'): # if using hrnet, you need to take care of transition
                 if name == 'transition1': # in transition1, you need to split the module to two streams first
@@ -78,6 +79,8 @@ class IntermediateLayerGetter(nn.ModuleDict):
                     x.append(module(x[-1]))
             else: # other models (ex:resnet,mobilenet) are convolutions in series.
                 x = module(x)
+                if encode_only and name in ['layer1', 'layer2', 'layer3', 'layer4']:
+                    feats.append(x)
 
             if name in self.return_layers:
                 out_name = self.return_layers[name]
@@ -90,4 +93,6 @@ class IntermediateLayerGetter(nn.ModuleDict):
                     out[out_name] = x
                 else:
                     out[out_name] = x
+        if encode_only:
+            return feats
         return out

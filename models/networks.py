@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms as T
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
@@ -588,14 +589,17 @@ class PatchSampleF(nn.Module):
         init_net(self, self.init_type, self.init_gain, self.gpu_ids)
         self.mlp_init = True
 
-    def forward(self, feats, num_patches=64, patch_ids=None):
+    def forward(self, feats, labels, num_patches=64, patch_ids=None):
         return_ids = []
         return_feats = []
+        return_labels = []
         if self.use_mlp and not self.mlp_init:
             self.create_mlp(feats)
         for feat_id, feat in enumerate(feats):
             B, H, W = feat.shape[0], feat.shape[2], feat.shape[3]
+            label = labels[:, ::int(label.shape[1]/H), ::int(label.shape[2]/W)]
             feat_reshape = feat.permute(0, 2, 3, 1).flatten(1, 2)
+            label_reshape = label.flatten(1, 2)
             if num_patches > 0:
                 if patch_ids is not None:
                     patch_id = patch_ids[feat_id]
@@ -606,8 +610,10 @@ class PatchSampleF(nn.Module):
                     patch_id = patch_id[:int(min(num_patches, patch_id.shape[0]))]  # .to(patch_ids.device)
                 patch_id = torch.tensor(patch_id, dtype=torch.long, device=feat.device)
                 x_sample = feat_reshape[:, patch_id, :].flatten(0, 1)  # reshape(-1, x.shape[1])
+                y_sample = label_reshape[:, patch_id].flatten(0, 1)
             else:
                 x_sample = feat_reshape
+                y_sample = label_reshape
                 patch_id = []
             if self.use_mlp:
                 mlp = getattr(self, 'mlp_%d' % feat_id)
@@ -617,8 +623,10 @@ class PatchSampleF(nn.Module):
 
             if num_patches == 0:
                 x_sample = x_sample.permute(0, 2, 1).reshape([B, x_sample.shape[-1], H, W])
+                y_sample = y_sample.reshape([B, H, W])
             return_feats.append(x_sample)
-        return return_feats, return_ids
+            return_labels.append(y_sample)
+        return return_feats, return_labels
 
 
 class G_Resnet(nn.Module):

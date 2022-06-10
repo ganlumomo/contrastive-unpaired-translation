@@ -93,7 +93,7 @@ class BaseModel(ABC):
             opt (Option class) -- stores all the experiment flags; needs to be a subclass of BaseOptions
         """
         if self.isTrain:
-            self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers]
+            self.schedulers = [networks.get_scheduler(optimizer, opt) for optimizer in self.optimizers[1:]]
         if not self.isTrain or opt.continue_train:
             load_suffix = opt.epoch
             self.load_networks(load_suffix)
@@ -142,7 +142,7 @@ class BaseModel(ABC):
             else:
                 scheduler.step()
 
-        lr = self.optimizers[0].param_groups[0]['lr']
+        lr = self.optimizers[1].param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
 
     def get_current_visuals(self):

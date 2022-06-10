@@ -51,7 +51,7 @@ if __name__ == '__main__':
     print('creating web directory', web_dir)
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
 
-    model.visual_names = ['target', 'target_pred', 'target_label']
+    model.visual_names = ['image', 'pred', 'label']
     for i, data in enumerate(dataset):
         if i == 0:
             if opt.eval:

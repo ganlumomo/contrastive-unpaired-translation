@@ -54,6 +54,11 @@ class SegmentationDataset(BaseDataset):
             A.HorizontalFlip(p=0.5),
             A.ColorJitter(p=0.5)
         ])
+        if self.opt.phase == "test":
+            transform = A.Compose([
+                A.Resize(height=self.opt.crop_size, width=self.opt.crop_size, always_apply=True),
+            ])
+
         augmented = transform(image=image, mask=label)
         image = augmented['image']
         image = 2*(image/255) - 1
